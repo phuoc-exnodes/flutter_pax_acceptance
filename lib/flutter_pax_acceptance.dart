@@ -16,15 +16,10 @@ class FlutterPaxAcceptance with ChangeNotifier {
   static const int loading = 4;
   static const int processing = 5;
   // static const int errorState = 5;
- 
-  final ValueListenable<int> _stat = ValueNotifier<int>(loading);
-  final _state = loading.obs;
-  int get state => _state.value;
 
-  // final RxList<String> _errors = RxList([]);
-  // List<String> get errors => _errors;
-//
-  StreamSubscription<int>? _stateSubscription;
+  // ignore: prefer_final_fields
+  int _state = loading;
+  int get state => _state;
 
   WebSocket? _connection;
 
@@ -34,18 +29,6 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   Function(dynamic data)? onDataListener;
 
-  void unSubcribeStatus() {
-      
-    _stat.removeListener(() { })
-    _stateSubcription?.cancel();
-  }
-
-  void listenForStatus(void Function(int state) onStatus) {
-    _stateSubcription = _state.listenAndPump(
-      onStatus,
-    );
-  }
-
   ///init service for PAX terminal.
   Future<void> init() async {
     await checkState();
@@ -54,9 +37,10 @@ class FlutterPaxAcceptance with ChangeNotifier {
     }
   }
 
+  @override
   void dispose() {
+    super.dispose();
     _connection?.close();
-    _stateSubcription?.cancel();
   }
 
   /// Check all requirements to know which state the Service is met
@@ -181,8 +165,6 @@ class FlutterPaxAcceptance with ChangeNotifier {
     }
   }
 
- 
-
   Future<void> disconnect() async {
     await _connection?.close();
     _connection = null;
@@ -290,7 +272,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   void _setState(int newState) {
     final oldState = state;
-    _state.value = newState;
+    _state = newState;
     switch (state) {
       case notPaired:
         debugPrint('PaxTerminalService: Not paired');
@@ -307,12 +289,13 @@ class FlutterPaxAcceptance with ChangeNotifier {
         {
           Future.delayed(const Duration(seconds: 30)).then((value) {
             if (state == loading) {
-              _state.value = oldState;
+              _state = oldState;
             }
           });
         }
         break;
     }
+    notifyListeners();
   }
 
   ///Update host when switching wifi/local network
@@ -328,12 +311,12 @@ class FlutterPaxAcceptance with ChangeNotifier {
       return false;
     }
   }
-  
+
   @override
   void addListener(VoidCallback listener) {
     // TODO: implement addListener
   }
-  
+
   @override
   void removeListener(VoidCallback listener) {
     // TODO: implement removeListener

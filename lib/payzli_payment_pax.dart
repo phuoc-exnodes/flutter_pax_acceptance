@@ -1,3 +1,5 @@
+library flutter_pax_acceptance;
+
 import 'dart:convert';
 
 import 'package:flutter_pax_acceptance/flutter_pax_acceptance.dart';
@@ -21,9 +23,6 @@ class PayzliPaymentPAX extends FlutterPaxAcceptance {
     void Function(ErrorResponse response)? onErrorResponse,
     void Function(String error)? onError,
   }) {
-    _service.addListener(() {
-      _service.state;
-    });
     //Validating requirement,...
     if (_service.state != FlutterPaxAcceptance.connected) {
       onError?.call('Pax terminal cannot handle request right now');
