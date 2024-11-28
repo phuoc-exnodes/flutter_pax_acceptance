@@ -46,14 +46,17 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   Function(dynamic data)? _onDataListener;
 
+  ///Dispose and release resources
   @override
   void dispose() {
     super.dispose();
+    _onDataListener = null;
     _connection?.close();
+    _subscription?.cancel();
     _connection = null;
   }
 
-  ///init Sevice for specific POS with posId.
+  ///init Service for specific POS with posId.
   ///Checking for files then start the connection automatically if ready
   ///
   ///Make sure using the the same posId so the nextime init can retreive correct files
