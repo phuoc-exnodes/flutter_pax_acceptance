@@ -1,4 +1,4 @@
-part of '../flutter_pax_acceptance.dart';
+part of flutter_pax_acceptance;
 
 class AmountDetails {
   final String currency;
