@@ -12,25 +12,122 @@ and the Flutter guide for
 -->
 
 TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+know whether this package might be useful for them. 
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+
+Pair PAX Terminal
+Connect PAX's Websocket Server
+Process Sale Request
+Process Refund Request
+
+
 
 ## Getting started
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+Prepare a PAX Terminal which is configured to the Store merchant, Installed Acceptance device app
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+These steps is for newly connection between POS device and PAX terminal;
+
+Step 1:
+Instantiating FlutterPaxAcceptance class and call init() on it. 
+This will check device's storage for required files like rootCA, Private certificate and PAX's Host string.
+If  already having those files, FlutterPaxAcceptance will automatically connect to PAX's socket server
+```dart
+  final FlutterPaxAcceptance _paxAcceptance = FlutterPaxAcceptance();
+    _paxAcceptance.initialize();
+```
+
+If state is notReady, then add PAX Terminal Server rootCA
 
 ```dart
-const like = 'sample';
+    final String rootCA = yourRootCASource();
+    _paxAcceptance.setRootCA(rootCA);
 ```
+
+Step 2:
+Pair the POS device and PAX Terminal by calling this function:
+posId : A String of only numbers
+
+```dart
+   paxAcceptance.pairPAXTerminal(
+                            ipAddress: '192.168.x.x',
+                              port:8443,
+                            posId: 'Your POSID number',
+                            setupCode: 'Code from PAX\'s Pair screen');
+```
+If Pair success, a Private certificate (String) are received and stored, also save the Host used.
+
+Step 3: 
+Connect to the PAX Terminal Websocket Server by calling connect() on the FlutterPaxAcceptance class.
+This method will setup a HttpClient with a SecureContext which is configured to use the rootCA,  Certificate chain from Step 1 and 2.
+
+```dart
+    _paxAcceptance.connect();
+```
+
+If connect success, you can start sending request to Pax Terminal to process Sale and Refund.
+You can use predefined class PayzliPaymentPAX passed in an instance of FlutterPaxAcceptance for a capsulated code. Or calling process() on FlutterPaxAcceptance for a customizable request.
+
+Using predefined class PayzliPaymentPAX;
+
+Processing a Sale request:
+
+```dart
+ final PayzliPaymentPAX payzliPaymentPAX = PayzliPaymentPAX(_paxAcceptance);
+    final SalePaymentRequest request = SalePaymentRequest(
+      merchantReferenceCode: 'your customer id',
+      amountDetails: const AmountDetails.sale(currency: 'USD', amount: '1.00'),
+    );
+
+    payzliPaymentPAX.transactionSale(
+      request,
+      onDoneApproved: (response) {
+        //Process success payment response
+      },
+      onDoneAborted: (response) {
+        //Process Aborted payment response
+      },
+      onError: (error) {
+        //Process Error
+      },
+      onErrorResponse: (response) {
+        //Process Error payment response
+      },
+      onStatus: (response) {
+        //Process Pax terminal Status in mid-transaction
+      },
+    );
+```
+Using pure request using process() method on  FlutterPaxAcceptance();
+
+IMPORTANT: Call completeProcessing() to release the processing state after the transaction. Otherwise, calling process() again wont work
+
+```dart
+  final Map<String, dynamic> request = {
+      'type': 'ProcessSale',
+      'merchantReferenceCode': 'custom ID',
+      'amountDetails': {
+        'currency':'USD',
+        'amount':'1.00',
+      },
+    };
+   
+    _paxAcceptance.process( 
+      request
+    , (data) { 
+        ///Handle reponse from PAX terminal: PaymentResponse,ErrorResponse,...
+    });
+
+      ///Call completeProcessing() to set the FlutterPaxAcceptance state back to 'connected' to be able to process later request.
+    _paxAcceptance.completeProcessing();
+```
+
+
+
 
 ## Additional information
 

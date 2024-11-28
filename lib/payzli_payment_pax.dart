@@ -1,5 +1,3 @@
-library flutter_pax_acceptance;
-
 import 'dart:convert';
 
 import 'package:flutter_pax_acceptance/flutter_pax_acceptance.dart';
@@ -10,11 +8,12 @@ import 'models/sale_payment_request.dart';
 import 'models/transaction_error_response.dart';
 import 'models/transaction_status_response.dart';
 
-class PayzliPaymentPAX extends FlutterPaxAcceptance {
+///A capsulated flow for FlutterPaxAcceptance request
+class PayzliPaymentPAX {
   final FlutterPaxAcceptance _service;
   PayzliPaymentPAX(this._service);
 
-  ///handle full payment
+  ///handle full payment flow
   void transactionSale(
     SalePaymentRequest request, {
     required void Function(PaymentResponse response) onDoneApproved,
@@ -25,7 +24,12 @@ class PayzliPaymentPAX extends FlutterPaxAcceptance {
   }) {
     //Validating requirement,...
     if (_service.state != FlutterPaxAcceptance.connected) {
-      onError?.call('Pax terminal cannot handle request right now');
+      onError?.call('FlutterPaxAcceptance not Connected');
+      return;
+    }
+    if (_service.state == FlutterPaxAcceptance.processing) {
+      onError?.call('FlutterPaxAcceptance is processing a request');
+      return;
     }
     //validate input
 
@@ -48,7 +52,7 @@ class PayzliPaymentPAX extends FlutterPaxAcceptance {
                 onDoneApproved.call(paymentResponse);
               }
               if (paymentResponse.message == 'Payment aborted') {
-                onDoneApproved.call(paymentResponse);
+                onDoneAborted.call(paymentResponse);
               }
               _service.completeProcessing();
             }
@@ -69,9 +73,10 @@ class PayzliPaymentPAX extends FlutterPaxAcceptance {
         onError?.call(e.toString());
       }
     });
+    return;
   }
 
-  ///handle Refund
+  ///handle Linkded Refund
   void refund(
     RefundRequest request, {
     required void Function(PaymentResponse response) onDoneApproved,

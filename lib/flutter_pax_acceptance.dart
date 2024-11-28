@@ -5,118 +5,230 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-class FlutterPaxAcceptance with ChangeNotifier {
-  static const int notReady = 0;
-  static const int notPaired = 1;
-  static const int disconnected = 2;
-  static const int connected = 3;
-  static const int loading = 4;
-  static const int processing = 5;
-  // static const int errorState = 5;
+import 'models/pax_pair_request.dart';
 
-  // ignore: prefer_final_fields
-  int _state = loading;
+class FlutterPaxAcceptance with ChangeNotifier {
+  ///When no rootRA are found
+  static const int notReady = 0;
+
+  ///When no PrivateCertificateChain and Host found
+  static const int notPaired = 1;
+
+  ///When files ready but not connected to PAX's websocket
+  static const int disconnected = 2;
+
+  ///When  connected to PAX's websocket
+  static const int connected = 3;
+
+  ///When processing request
+  static const int processing = 4;
+
+  ///When doing something
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  int _state = notReady;
   int get state => _state;
 
   WebSocket? _connection;
+  StreamSubscription? _subscription;
 
-  String? host;
-  String? rootCA;
-  String? privateCert;
+  String? _host;
+  String? get host => _host;
+  String? _rootCA;
+  String? get rootCA => _rootCA;
+  String? _privateCert;
+  String? get privateCert => _privateCert;
 
-  Function(dynamic data)? onDataListener;
+  Function(dynamic data)? _onDataListener;
 
-  ///init service for PAX terminal.
-  Future<void> init() async {
-    await checkState();
-    if (state == disconnected) {
-      connect();
-    }
-  }
-
+  ///Dispose and release resources
   @override
   void dispose() {
     super.dispose();
+    _onDataListener = null;
     _connection?.close();
+    _subscription?.cancel();
+    _connection = null;
   }
 
-  /// Check all requirements to know which state the Service is met
-  Future<void> checkState() async {
-    _setState(loading);
-    if (!await _getRootCA()) return;
+  ///init Service for specific POS with posId.
+  ///Checking for files then start the connection automatically if ready
+  ///
+  ///Make sure using the the same posId so the nextime init can retreive correct files
+  bool _isInitialized = false;
+  Future<void> initialize() async {
+    if (_isInitialized) {
+      debugPrint('FlutterPaxAcceptance: Already initialized');
+      return;
+    }
+    _isInitialized = true;
+
+    if (_isLoading) return;
+    _isLoading = true;
+
+    //Check for rootCA, if false, state is notReady
+    if (!await _getRootCA()) {
+      _isLoading = false;
+      return;
+    }
+    //Check for PrivateCert and host saved, if false, state is notPaired
     if (!await _getRequiredFiles()) {
+      _isLoading = false;
       return;
     }
-    if (_connection != null && _connection!.readyState == WebSocket.open) {
-      _setState(connected);
-      return;
-    }
-    _setState(disconnected);
-    return;
+
+    _isLoading = false;
+    connect();
   }
 
-  //Pair a new PAX to use and remove old one
-  Future<bool> pair(
-      {required String host,
-      required String posId,
-      required String setupCode}) async {
-    if (state == connected) {
+  ///Call to refresh service state, include Checking files, stop Processing, reconnect,..
+  Future<void> refresh() async {
+    _isLoading = true;
+
+    _connection?.close();
+    _connection = null;
+    _subscription?.cancel();
+
+    if (!await _getRootCA()) {
+      _isLoading = false;
+      return;
+    }
+    await _getRequiredFiles();
+
+    _isLoading = false;
+    if (state == disconnected) {
+      await connect();
+    }
+  }
+
+  ///Set PAX's server rootCA
+  ///
+  ///If success, call refresh() to take affect.
+  Future<bool> setRootCA(String ca) async {
+    try {
+      //Check if rootCa is valid, if not. an Exception is thrown
+      SecurityContext().setTrustedCertificatesBytes(utf8.encode(ca));
+
+      //Save the rootCA
+      final success = await _LocalTerminalDS.saveRootCA(ca);
+      if (success) {
+        _rootCA = ca;
+      }
+      return success;
+    } catch (e) {
+      debugPrint('FlutterPaxAcceptance: Error setting rootCA \n$e');
       return false;
     }
-    _setState(loading);
+  }
+
+  ///Pair a new PAX to use and remove old one.
+  ///
+  ///The posId must be a number, otherwise Pax terminal wont sync and response with status code of 500
+  Future<bool> pairPAXTerminal(
+      {required String ipAddress,
+      required int port,
+      required String setupCode}) async {
+    if (state == connected || _isLoading) return false;
+
+    if (setupCode.length < 8 || setupCode.length > 8) {
+      debugPrint('FlutterPaxAcceptance: Pair Error: Invalid setupCode');
+      return false;
+    }
+    if (!validateHost(ipAddress, port)) return false;
+
+    _isLoading = true;
+
     try {
       final dio = Dio(BaseOptions(
-        baseUrl: "https://$host",
+        baseUrl: 'https://$ipAddress:$port',
         connectTimeout: const Duration(seconds: 30),
+        receiveDataWhenStatusError: true,
+        persistentConnection: true,
       ));
 
-      final response =
-          await dio.post('/', data: {'posId': posId, 'setupCode': setupCode});
+      final client = HttpClient(context: SecurityContext());
+      client.badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+
+      dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () => client,
+      );
+
+      final pairRequest =
+          PaxPairRequest(posId: '1111', setupCode: setupCode).toJson();
+      final response = await dio.post('/', data: pairRequest);
 
       if (response.statusCode != 200 || response.data == null) {
+        _isLoading = false;
         _setState(notPaired);
         return false;
       }
       final certificateChain = response.data;
       debugPrint(response.data);
+      //Save Certificate and Host
       await _LocalTerminalDS.savePrivateCert(certificateChain);
-      await _LocalTerminalDS.saveHost(host);
+      await _LocalTerminalDS.saveHost('$ipAddress:$port');
 
-      privateCert = certificateChain;
-      this.host = host;
+      _privateCert = certificateChain;
+      _host = '$ipAddress:$port';
 
+      _isLoading = false;
       _setState(disconnected);
       return true;
     } catch (e) {
+      debugPrint('FlutterPaxAcceptance: Pair Error: $e');
+      _isLoading = false;
       _setState(notPaired);
       return false;
     }
   }
 
-  Future<bool> connect() async {
-    if (state == loading || state == processing) return false;
+  ///Unpair PAX device
+  Future<void> unPair() async {
+    if (state == processing || _isLoading) {
+      debugPrint('Terminal Service: Terminal is processing');
+      return;
+    }
+    _isLoading = true;
 
-    if (state != disconnected) {
+    await _connection?.close();
+    _connection = null;
+    _host = null;
+    _privateCert = null;
+
+    await _LocalTerminalDS.deleteCertificate();
+    await _LocalTerminalDS.deleteHost();
+
+    _isLoading = false;
+    _setState(notPaired);
+  }
+
+  Future<bool> connect() async {
+    String? error;
+    if (_isLoading || state == processing) {
+      error = 'FlutterPaxAcceptance: Service is loading or processing request!';
+    }
+    if (state == connected) {
+      error = 'FlutterPaxAcceptance: Already connected, try refresh';
+    }
+    if (state == notReady || state == notPaired) {
+      error = 'FlutterPaxAcceptance: Not ready or not paired to a PAX device';
+    }
+    if (error != null) {
+      debugPrint(error);
       return false;
     }
-    if (_connection != null || _connection?.readyState == WebSocket.open) {
-      debugPrint('PaxTerminalService: Already connected, try refresh');
-      return false;
-    }
-    if (rootCA == null || privateCert == null || host == null) {
-      debugPrint('No Root CA or Private Certificate found');
-      return false;
-    }
-    _setState(loading);
+    _isLoading = true;
 
     try {
-      debugPrint(host);
-      final secureContext = SecurityContext(withTrustedRoots: true);
-      secureContext.useCertificateChainBytes(utf8.encode(privateCert!));
+      final secureContext = SecurityContext();
       secureContext.setTrustedCertificatesBytes(utf8.encode(rootCA!));
+      secureContext.useCertificateChainBytes(utf8.encode(privateCert!));
       secureContext.usePrivateKeyBytes(utf8.encode(privateCert!));
 
       final httpClient = HttpClient(context: secureContext);
@@ -124,43 +236,50 @@ class FlutterPaxAcceptance with ChangeNotifier {
       httpClient.badCertificateCallback =
           (X509Certificate cert, String host, int port) => true;
 
+      _subscription?.cancel();
+      _connection?.close();
+      debugPrint('FlutterPaxAcceptance: Connecting to $host');
+
       _connection =
           await WebSocket.connect('wss://$host', customClient: httpClient);
       //If connection is aborted before establish(Calling 'cancelConnect', 'disconnect',.. )
-      if (state == disconnected) {
+      if (!isLoading) {
         _connection?.close();
+        _subscription?.cancel();
+        _connection = null;
       }
-      _setState(connected);
 
-      _connection?.listen(
-          (event) {
-            onDataListener?.call(event);
-            //check the response to know if payment process has been aborted/ended
-            try {
-              final jsonData = jsonDecode(event);
-              if ((jsonData['message'] as String?)?.contains('aborted') ==
-                      true ||
-                  jsonData['type'] == 'ErrorResponse') {
-                _setState(connected);
-              }
-            } catch (e) {
-              debugPrint(e.toString());
+      _subscription = _connection?.listen(
+        (event) {
+          _onDataListener?.call(event);
+          //check the response to know if payment process has been aborted/ended
+          try {
+            final jsonData = jsonDecode(event);
+            if ((jsonData['message'] as String?)?.contains('aborted') == true ||
+                jsonData['type'] == 'ErrorResponse') {
+              _setState(connected);
             }
-          },
-          onDone: () {
-            debugPrint('PaxTerminalService : Done');
-            _setState(disconnected);
-          },
-          cancelOnError: true,
-          onError: (error, stacktrace) {
-            debugPrint('PaxTerminalService : Error $error');
-          });
-
+          } catch (e) {
+            debugPrint(e.toString());
+          }
+        },
+        onDone: () {
+          debugPrint('FlutterPaxAcceptance : Connection has ended');
+          _setState(disconnected);
+        },
+        cancelOnError: true,
+        onError: (error, stacktrace) {
+          debugPrint('FlutterPaxAcceptance : Connection Error $error');
+        },
+      );
+      _isLoading = false;
+      _setState(connected);
       return true;
     } on Exception catch (e) {
+      debugPrint('FlutterPaxAcceptance: Cannot connect to PAX terminal');
+      debugPrint('FlutterPaxAcceptance: $e');
+      _isLoading = false;
       _setState(disconnected);
-      debugPrint('PaxTerminalService: Cannot connect to PAX terminal');
-      debugPrint('PaxTerminalService: $e');
       return false;
     }
   }
@@ -168,77 +287,58 @@ class FlutterPaxAcceptance with ChangeNotifier {
   Future<void> disconnect() async {
     await _connection?.close();
     _connection = null;
+    _isLoading = false;
     _setState(disconnected);
   }
 
-  ///Send payment request to PAX terminal, only one listener registered at a time.
+  ///Send payment request to PAX terminal Socket Server, only one listener registered at a time.
   ///If a transaction is in process, new one is skipped.
   void process(
       Map<String, dynamic> request, void Function(dynamic data)? listener) {
     if (state != connected || _connection == null) {
-      debugPrint('Terminal Service: Terminal not connected');
+      debugPrint('FlutterPaxAcceptance: Terminal not connected');
       return;
     }
 
     if (state == processing) {
-      debugPrint('Terminal Service: Terminal is processing');
+      debugPrint(
+          'FlutterPaxAcceptance: Terminal is in processing, call cancelProcessing() to stop');
       return;
     }
     _setState(processing);
-    onDataListener = listener ?? onDataListener;
+    _onDataListener = listener ?? _onDataListener;
     _connection!.add(jsonEncode(request));
   }
 
   ///Send abort request to PAX terminal to stop payment process
   void cancelProcessing() {
     if (state == processing || state == connected) {
-      final request = {"type": "CancelRequest"};
-      _connection!.add(jsonEncode(request));
+      final abortRequest = {"type": "CancelRequest"};
+      _connection!.add(jsonEncode(abortRequest));
+      _setState(connected);
     }
   }
 
-  ///Manually cancel payment processing.
-  ///
-  ///Should be call at the end of each payment request to ensure
-  ///Service able to process new payment request
+  ///Call when Payment process has completed.
+  ///If not completed, call cancelProcessing() to cancel
   void completeProcessing() {
     _setState(connected);
-    checkState();
-  }
-
-  ///Unpair PAX device
-  Future<void> resetSetting() async {
-    if (state == processing) {
-      debugPrint('Terminal Service: Terminal is processing');
-      return;
-    }
-    _setState(loading);
-
-    await _connection?.close();
-    _connection = null;
-
-    host = null;
-
-    privateCert = null;
-    await _LocalTerminalDS.deleteCertificate();
-    await _LocalTerminalDS.deleteHost();
-    _setState(notPaired);
   }
 
   ///Get PAX's rootCA
   Future<bool> _getRootCA() async {
     try {
       String? localRootCA = await _LocalTerminalDS.loadRootCA();
-
-      debugPrint('localRootCA ${localRootCA != null}');
+      debugPrint(
+          'FlutterPaxAcceptance: rootCA:  ${localRootCA == null ? null : true}');
 
       if (localRootCA == null) {
         _setState(notReady);
         return false;
       }
-      rootCA = localRootCA;
+      _rootCA = localRootCA;
 
-      _setState(notReady);
+      _setState(notPaired);
       return true;
     } catch (e) {
       _setState(notReady);
@@ -248,20 +348,26 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   ///Get required file needed when connect to PAX's websocket
   Future<bool> _getRequiredFiles() async {
-    final storedPrivateCert = await _LocalTerminalDS.loadPrivateCert();
-    final storedHost = await _LocalTerminalDS.loadHost();
-
-    debugPrint('storedPrivateCert ${storedPrivateCert != null}');
-    debugPrint('storedHost $storedHost');
-
-    if (storedPrivateCert == null || storedHost == null) {
-      _setState(notPaired);
-      return false;
-    }
-
     try {
-      privateCert = storedPrivateCert;
-      host = storedHost;
+      final storedPrivateCert = await _LocalTerminalDS.loadPrivateCert();
+      final storedHost = await _LocalTerminalDS.loadHost();
+      // final String? localRootCA = await _LocalTerminalDS.loadRootCA();
+
+      debugPrint(
+          'FlutterPaxAcceptance: storedPrivateCert ${storedPrivateCert}');
+      debugPrint('FlutterPaxAcceptance: storedHost $storedHost');
+
+      if (storedPrivateCert == null || storedHost == null
+          // ||localRootCA == null
+          ) {
+        _setState(notPaired);
+        return false;
+      }
+
+      _privateCert = storedPrivateCert;
+      _host = storedHost;
+      // _rootCA = localRootCA;
+
       _setState(disconnected);
       return true;
     } catch (e) {
@@ -271,55 +377,59 @@ class FlutterPaxAcceptance with ChangeNotifier {
   }
 
   void _setState(int newState) {
-    final oldState = state;
     _state = newState;
     switch (state) {
       case notPaired:
-        debugPrint('PaxTerminalService: Not paired');
+        debugPrint('FlutterPaxAcceptance: Not paired');
 
         break;
       case disconnected:
-        debugPrint('PaxTerminalService: Disconnected');
+        debugPrint('FlutterPaxAcceptance: Disconnected');
 
         break;
       case connected:
-        debugPrint('PaxTerminalService: Connected');
+        debugPrint('FlutterPaxAcceptance: Connected');
         break;
-      case loading:
-        {
-          Future.delayed(const Duration(seconds: 30)).then((value) {
-            if (state == loading) {
-              _state = oldState;
-            }
-          });
-        }
+      case processing:
+        debugPrint('FlutterPaxAcceptance: Processing');
         break;
     }
     notifyListeners();
   }
 
-  ///Update host when switching wifi/local network
-  Future<bool> saveHost(String newHost) async {
+  ///Listen to state change
+  @override
+  void addListener(void Function() listener) {
+    super.addListener(listener);
+  }
+
+  ///Update PAX terminal IP address
+  Future<bool> setHost(String ip, int port) async {
     try {
-      final success = await _LocalTerminalDS.saveHost(newHost);
+      if (!validateHost(ip, port)) {
+        return false;
+      }
+      String hostString = '$ip:$port';
+      final success = await _LocalTerminalDS.saveHost(hostString);
 
       if (success) {
-        host = newHost;
+        _host = hostString;
       }
       return success;
     } catch (e) {
+      debugPrint('Invalid host');
       return false;
     }
   }
 
-  @override
-  void addListener(VoidCallback listener) {
-    // TODO: implement addListener
-  }
-
-  @override
-  void removeListener(VoidCallback listener) {
-    // TODO: implement removeListener
+  bool validateHost(String ipAddress, int port) {
+    final ipv4Regex = RegExp(
+        r'^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9][0-9]|[1-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9][0-9]|[0-9])$');
+    if ((!ipv4Regex.hasMatch(ipAddress) || !(port >= 1 && port <= 65535))) {
+      debugPrint('FlutterPaxAcceptance: Invalid IP and Port');
+      return false;
+    }
+    return true;
   }
 }
 
@@ -328,7 +438,9 @@ class _LocalTerminalDS {
   static const String rootCAPath = '/root_ca.pem';
   static const String terminalUrl = '/terminal_url.txt';
 
-  static Future<bool> saveRootCA(String cert) async {
+  static Future<bool> saveRootCA(
+    String cert,
+  ) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
 
@@ -340,7 +452,9 @@ class _LocalTerminalDS {
     }
   }
 
-  static Future<bool> savePrivateCert(String cert) async {
+  static Future<bool> savePrivateCert(
+    String cert,
+  ) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
 
@@ -373,7 +487,9 @@ class _LocalTerminalDS {
     }
   }
 
-  static Future<bool> saveHost(String host) async {
+  static Future<bool> saveHost(
+    String host,
+  ) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
 
@@ -415,24 +531,6 @@ class _LocalTerminalDS {
       final directoryPath = (await getApplicationDocumentsDirectory()).path;
       final file = File(directoryPath + terminalUrl);
       await file.delete();
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  static Future<bool> clearAll() async {
-    try {
-      final directoryPath = (await getApplicationDocumentsDirectory()).path;
-
-      final file = File(directoryPath + terminalUrl);
-      final rootCAPathFile = File(directoryPath + rootCAPath);
-      final privateCertificateFile = File(directoryPath + privateCertificate);
-
-      await file.delete();
-      await rootCAPathFile.delete();
-      await privateCertificateFile.delete();
-
       return true;
     } catch (e) {
       return false;

@@ -13,4 +13,10 @@ class TransactionStatusResponse {
       message: json['message'],
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      type: type,
+      message: message,
+    };
+  }
 }

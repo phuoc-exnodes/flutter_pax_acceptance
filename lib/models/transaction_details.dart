@@ -24,4 +24,13 @@ class TransactionDetails {
       amountDetails: AmountDetails.fromJson(json['amountDetails']),
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'merchantReferenceCode': merchantReferenceCode,
+      'submitTimeUtc': submitTimeUtc.toUtc(),
+      'captured': captured,
+      'amountDetails': amountDetails.toJson(),
+    };
+  }
 }
