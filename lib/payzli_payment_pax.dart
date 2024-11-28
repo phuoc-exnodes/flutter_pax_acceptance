@@ -8,7 +8,9 @@ import 'models/sale_payment_request.dart';
 import 'models/transaction_error_response.dart';
 import 'models/transaction_status_response.dart';
 
-///A capsulated flow for FlutterPaxAcceptance request
+///A capsulated flow for FlutterPaxAcceptance request.
+///
+///Passed in FlutterPaxAcceptance instance
 class PayzliPaymentPAX {
   final FlutterPaxAcceptance _service;
   PayzliPaymentPAX(this._service);
@@ -85,6 +87,17 @@ class PayzliPaymentPAX {
     void Function(ErrorResponse response)? onErrorResponse,
     void Function(String error)? onError,
   }) {
+    //Validating requirement,...
+    if (_service.state != FlutterPaxAcceptance.connected) {
+      onError?.call('FlutterPaxAcceptance not Connected');
+      return;
+    }
+    if (_service.state == FlutterPaxAcceptance.processing) {
+      onError?.call('FlutterPaxAcceptance is processing a request');
+      return;
+    }
+    //validate input
+
     _service.process(request.toJson(), (data) {
       try {
         final jsonData = jsonDecode(data);
