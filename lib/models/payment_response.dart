@@ -19,4 +19,11 @@ class PaymentResponse {
           TransactionDetails.fromJson(json['transactionDetails']),
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type,
+      'message': message,
+      'transactionDetails': transactionDetails.toJson(),
+    };
+  }
 }

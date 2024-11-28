@@ -1,5 +1,3 @@
-library flutter_pax_acceptance;
-
 import 'dart:convert';
 
 import 'package:flutter_pax_acceptance/flutter_pax_acceptance.dart';
@@ -10,7 +8,7 @@ import 'models/sale_payment_request.dart';
 import 'models/transaction_error_response.dart';
 import 'models/transaction_status_response.dart';
 
-class PayzliPaymentPAX extends FlutterPaxAcceptance {
+class PayzliPaymentPAX {
   final FlutterPaxAcceptance _service;
   PayzliPaymentPAX(this._service);
 
