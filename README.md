@@ -54,7 +54,8 @@ posId : A String of only numbers
 
 ```dart
    paxAcceptance.pairPAXTerminal(
-                            host: '192.168.x.x:PORT',
+                            ipAddress: '192.168.x.x',
+                              port:8443,
                             posId: 'Your POSID number',
                             setupCode: 'Code from PAX\'s Pair screen');
 ```
@@ -62,14 +63,14 @@ If Pair success, a Private certificate (String) are received and stored, also sa
 
 Step 3: 
 Connect to the PAX Terminal Websocket Server by calling connect() on the FlutterPaxAcceptance class.
-This method will setup a HttpClient with a SecureContext which is configured to use the rootCA String,  Certificate chain and Key from Step 1 and 2.
+This method will setup a HttpClient with a SecureContext which is configured to use the rootCA,  Certificate chain from Step 1 and 2.
 
 ```dart
     _paxAcceptance.connect();
 ```
 
 If connect success, you can start sending request to Pax Terminal to process Sale and Refund.
-You can use this predefined class PayzliPaymentPAX passed in an instance of FlutterPaxAcceptance for a capsulated code. Or calling process() on FlutterPaxAcceptance for a customizable request.
+You can use predefined class PayzliPaymentPAX passed in an instance of FlutterPaxAcceptance for a capsulated code. Or calling process() on FlutterPaxAcceptance for a customizable request.
 
 Using predefined class PayzliPaymentPAX;
 
@@ -103,7 +104,7 @@ Processing a Sale request:
 ```
 Using pure request using process() method on  FlutterPaxAcceptance();
 
-IMPORTANT: You have to call  completeProcessing() to release the processing state after the transaction. Otherwise, calling process() again wont work
+IMPORTANT: Call completeProcessing() to release the processing state after the transaction. Otherwise, calling process() again wont work
 
 ```dart
   final Map<String, dynamic> request = {
