@@ -96,13 +96,22 @@ class _PairTerminalBlockViewState extends State<PairTerminalBlockView> {
                           isPaxLoading = true;
                         });
                         try {
-                          await widget.paxAcceptance.pairPAXTerminal(
-                              ipAddress: paxIPController.text.split(':')[0],
-                              port: int.parse(
-                                paxIPController.text.split(':')[1],
-                              ),
-                              setupCode: paxCodeController.text);
-                        } catch (e) {}
+                          final success =
+                              await widget.paxAcceptance.pairPAXTerminal(
+                                  ipAddress: paxIPController.text.split(':')[0],
+                                  port: int.parse(
+                                    paxIPController.text.split(':')[1],
+                                  ),
+                                  setupCode: paxCodeController.text);
+                          if (!success) {
+                            // ignore: use_build_context_synchronously
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                                const SnackBar(
+                                    content: Text('Failed to pair')));
+                          }
+                        } catch (e) {
+                          print(e);
+                        }
 
                         setState(() {
                           isPaxLoading = false;

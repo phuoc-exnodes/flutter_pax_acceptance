@@ -38,7 +38,11 @@ This will check device's storage for required files like rootCA, Private certifi
 If  already having those files, FlutterPaxAcceptance will automatically connect to PAX's socket server
 ```dart
   final FlutterPaxAcceptance _paxAcceptance = FlutterPaxAcceptance();
-    _paxAcceptance.initialize();
+    _paxAcceptance.initialize(
+      onGetRootCA:(){
+        //Callback to provide rootCA when no local rootCA is founded
+      }
+    );
 ```
 
 If state is notReady, then add PAX Terminal Server rootCA
@@ -47,10 +51,22 @@ If state is notReady, then add PAX Terminal Server rootCA
     final String rootCA = yourRootCASource();
     _paxAcceptance.setRootCA(rootCA);
 ```
+Or setting callback for getting rootCA 
+
+```dart
+     final FlutterPaxAcceptance _paxAcceptance = FlutterPaxAcceptance();
+    _paxAcceptance.onGetRootCA = rootCAsource();
+    //Call refresh to apply changes
+    _paxAcceptance.refresh();
+```
 
 Step 2:
 Pair the POS device and PAX Terminal by calling this function:
-posId : A String of only numbers
+
+posId : A String of only numbers.
+ipAddress: PAX terminal IpAddress.
+port: PAX terminal Port.
+setupCode: Code from PAX\'s Pair screen.
 
 ```dart
    paxAcceptance.pairPAXTerminal(

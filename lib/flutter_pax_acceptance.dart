@@ -13,25 +13,28 @@ import 'models/pax_pair_request.dart';
 
 class FlutterPaxAcceptance with ChangeNotifier {
   ///When no rootRA are found
-  static const int notReady = 0;
+  static const int notInitialized = 0;
+
+  ///When no rootRA are found
+  static const int notReady = 1;
 
   ///When no PrivateCertificateChain and Host found
-  static const int notPaired = 1;
+  static const int notPaired = 2;
 
   ///When files ready but not connected to PAX's websocket
-  static const int disconnected = 2;
+  static const int disconnected = 3;
 
   ///When  connected to PAX's websocket
-  static const int connected = 3;
+  static const int connected = 4;
 
   ///When processing request
-  static const int processing = 4;
+  static const int processing = 5;
 
   ///When doing something
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  int _state = notReady;
+  int _state = notInitialized;
   int get state => _state;
 
   WebSocket? _connection;
@@ -46,11 +49,15 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   Function(dynamic data)? _onDataListener;
 
+  ///Callback when not found local rootCA
+  Future<String?> Function()? onGetRootCA;
+
   ///Dispose and release resources
   @override
   void dispose() {
     super.dispose();
     _onDataListener = null;
+    onGetRootCA = null;
     _connection?.close();
     _subscription?.cancel();
     _connection = null;
@@ -61,18 +68,20 @@ class FlutterPaxAcceptance with ChangeNotifier {
   ///
   ///Make sure using the the same posId so the nextime init can retreive correct files
   bool _isInitialized = false;
-  Future<void> initialize() async {
+  Future<void> initialize({Future<String?> Function()? onGetRootCA}) async {
+    if (_isLoading) return;
+    _isLoading = true;
+
     if (_isInitialized) {
       debugPrint('FlutterPaxAcceptance: Already initialized');
       return;
     }
     _isInitialized = true;
 
-    if (_isLoading) return;
-    _isLoading = true;
-
+    this.onGetRootCA = onGetRootCA;
     //Check for rootCA, if false, state is notReady
     if (!await _getRootCA()) {
+      _setState(notReady);
       _isLoading = false;
       return;
     }
@@ -106,9 +115,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
     }
   }
 
-  ///Set PAX's server rootCA
-  ///
-  ///If success, call refresh() to take affect.
+  ///Set PAX's server rootCA, this will refesh the service state
   Future<bool> setRootCA(String ca) async {
     try {
       //Check if rootCa is valid, if not. an Exception is thrown
@@ -118,6 +125,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
       final success = await _LocalTerminalDS.saveRootCA(ca);
       if (success) {
         _rootCA = ca;
+        await refresh();
       }
       return success;
     } catch (e) {
@@ -133,7 +141,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
       {required String ipAddress,
       required int port,
       required String setupCode}) async {
-    if (state == connected || _isLoading) return false;
+    if (state == connected || _isLoading || !_isInitialized) return false;
 
     if (setupCode.length < 8 || setupCode.length > 8) {
       debugPrint('FlutterPaxAcceptance: Pair Error: Invalid setupCode');
@@ -190,7 +198,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   ///Unpair PAX device
   Future<void> unPair() async {
-    if (state == processing || _isLoading) {
+    if (state == processing || _isLoading || !_isInitialized) {
       debugPrint('Terminal Service: Terminal is processing');
       return;
     }
@@ -203,14 +211,13 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
     await _LocalTerminalDS.deleteCertificate();
     await _LocalTerminalDS.deleteHost();
-
-    _isLoading = false;
-    _setState(notPaired);
+    await refresh();
   }
 
+  ///Connect to PAX Websocket server
   Future<bool> connect() async {
     String? error;
-    if (_isLoading || state == processing) {
+    if (_isLoading || state == processing || !_isInitialized) {
       error = 'FlutterPaxAcceptance: Service is loading or processing request!';
     }
     if (state == connected) {
@@ -249,14 +256,17 @@ class FlutterPaxAcceptance with ChangeNotifier {
         _connection = null;
       }
 
+      debugPrint('FlutterPaxAcceptance: Connected');
+
       _subscription = _connection?.listen(
         (event) {
           _onDataListener?.call(event);
           //check the response to know if payment process has been aborted/ended
           try {
             final jsonData = jsonDecode(event);
-            if ((jsonData['message'] as String?)?.contains('aborted') == true ||
-                jsonData['type'] == 'ErrorResponse') {
+            final isAborted =
+                (jsonData['message'] as String?)?.contains('aborted') == true;
+            if (isAborted || jsonData['type'] == 'ErrorResponse') {
               _setState(connected);
             }
           } catch (e) {
@@ -295,7 +305,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
   ///If a transaction is in process, new one is skipped.
   void process(
       Map<String, dynamic> request, void Function(dynamic data)? listener) {
-    if (state != connected || _connection == null) {
+    if (state != connected || _connection == null || !_isInitialized) {
       debugPrint('FlutterPaxAcceptance: Terminal not connected');
       return;
     }
@@ -314,7 +324,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
   void cancelProcessing() {
     if (state == processing || state == connected) {
       final abortRequest = {"type": "CancelRequest"};
-      _connection!.add(jsonEncode(abortRequest));
+      _connection?.add(jsonEncode(abortRequest));
       _setState(connected);
     }
   }
@@ -325,22 +335,34 @@ class FlutterPaxAcceptance with ChangeNotifier {
     _setState(connected);
   }
 
-  ///Get PAX's rootCA
+  ///Search Local Storage for RootCA,
+  ///
+  ///IF non found, call onGetRootCA callback,
+  ///
+  ///IF also non found, state is notReady
+  ///
   Future<bool> _getRootCA() async {
+    debugPrint('FlutterPaxAcceptance: Getting RootCA');
     try {
       String? localRootCA = await _LocalTerminalDS.loadRootCA();
-      debugPrint(
-          'FlutterPaxAcceptance: rootCA:  ${localRootCA == null ? null : true}');
 
-      if (localRootCA == null) {
-        _setState(notReady);
-        return false;
+      if (localRootCA != null) {
+        _rootCA = localRootCA;
+        return true;
       }
-      _rootCA = localRootCA;
-
-      _setState(notPaired);
-      return true;
+      //get from onGetRootCA callback
+      final result = await onGetRootCA?.call();
+      if (result != null) {
+        SecurityContext().setTrustedCertificatesBytes(utf8.encode(result));
+        _rootCA = result;
+        await _LocalTerminalDS.saveRootCA(result);
+        return true;
+      }
+      debugPrint('FlutterPaxAcceptance: RootCA not found');
+      _setState(notReady);
+      return false;
     } catch (e) {
+      debugPrint('FlutterPaxAcceptance: Error getting RootCA');
       _setState(notReady);
       return false;
     }
@@ -348,25 +370,18 @@ class FlutterPaxAcceptance with ChangeNotifier {
 
   ///Get required file needed when connect to PAX's websocket
   Future<bool> _getRequiredFiles() async {
+    debugPrint('FlutterPaxAcceptance: Getting Cetificate Chain');
     try {
       final storedPrivateCert = await _LocalTerminalDS.loadPrivateCert();
       final storedHost = await _LocalTerminalDS.loadHost();
-      // final String? localRootCA = await _LocalTerminalDS.loadRootCA();
 
-      debugPrint(
-          'FlutterPaxAcceptance: storedPrivateCert ${storedPrivateCert}');
-      debugPrint('FlutterPaxAcceptance: storedHost $storedHost');
-
-      if (storedPrivateCert == null || storedHost == null
-          // ||localRootCA == null
-          ) {
+      if (storedPrivateCert == null || storedHost == null) {
         _setState(notPaired);
         return false;
       }
 
       _privateCert = storedPrivateCert;
       _host = storedHost;
-      // _rootCA = localRootCA;
 
       _setState(disconnected);
       return true;
@@ -401,6 +416,7 @@ class FlutterPaxAcceptance with ChangeNotifier {
   @override
   void addListener(void Function() listener) {
     super.addListener(listener);
+    notifyListeners();
   }
 
   ///Update PAX terminal IP address

@@ -44,11 +44,22 @@ class _MyHomePageState extends State<MyHomePage> {
   String _posID = '1111';
 
   final TextEditingController rootCACtr = TextEditingController();
+
+  bool loading = false;
+
   @override
   void initState() {
     getServiceState();
     _paxAcceptance.addListener(getServiceState);
     super.initState();
+  }
+
+  setLoading(bool newValue) {
+    if (mounted) {
+      setState(() {
+        loading = newValue;
+      });
+    }
   }
 
   @override
@@ -80,8 +91,13 @@ class _MyHomePageState extends State<MyHomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     ElevatedButton(
-                        onPressed: () {
-                          _paxAcceptance.refresh();
+                        onPressed: () async {
+                          if (loading) {
+                            return;
+                          }
+                          setLoading(true);
+                          await _paxAcceptance.refresh();
+                          setLoading(false);
                         },
                         child: const Text('Refresh')),
                     const SizedBox(width: 10),
@@ -96,49 +112,56 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             Expanded(child: Builder(
               builder: (context) {
+                if (loading) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
                 switch (_paxState) {
+                  case FlutterPaxAcceptance.notInitialized:
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                            onPressed: () async {
+                              if (loading) {
+                                return;
+                              }
+                              setLoading(true);
+                              await _paxAcceptance.initialize(
+                                onGetRootCA: onGetRootCA,
+                              );
+                              setLoading(false);
+                            },
+                            child: const Text('Init')),
+                      ],
+                    );
                   case FlutterPaxAcceptance.notReady:
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton(
-                            onPressed: () {
-                              _paxAcceptance.initialize();
-                            },
-                            child: const Text('Init')),
-                        TextField(
-                          controller: rootCACtr,
-                        ),
-                        ElevatedButton(
                             onPressed: () async {
-                              try {
-                                //Fetching rootCA,
-                                final Dio dio = Dio(BaseOptions(
-                                    baseUrl: EvironmentDev.baseUrl));
-                                dio.interceptors
-                                    .add(HttpSignatureInterceptor());
-                                final response = await dio.get(
-                                  EvironmentDev.getRootCA,
-                                  data: null,
-                                );
-                                final rootCA =
-                                    response.data['certificateChain'];
-                                if (response.statusCode != 200 &&
-                                    rootCA == null) {
-                                  return;
-                                }
-                                //Replace with your rootCA
-                                await _paxAcceptance.setRootCA(rootCA);
-
-                                debugPrint(
-                                    'Successful saveRootCA: ${response.data}');
-                                debugPrint(
-                                    'Successful saveRootCA type: ${response.data['certificateChain'].runtimeType}');
-                              } catch (e) {
-                                debugPrint('error: $e');
+                              if (loading) {
+                                return;
                               }
+                              setLoading(true);
+                              // final success =
+                              // await _paxAcceptance.setRootCA('asdw');
+                              // if (!success) {
+                              //   ScaffoldMessenger.maybeOf(context)
+                              //       ?.showSnackBar(const SnackBar(
+                              //           content:
+                              //               Text('Failed to Set rootCA ')));
+                              // }
+
+                              _paxAcceptance.onGetRootCA = onGetRootCA;
+                              final success = await _paxAcceptance.refresh();
+
+                              setLoading(false);
                             },
-                            child: const Text('Set rootCA')),
+                            child: const Text('Set rootCA ')),
                       ],
                     );
                   case FlutterPaxAcceptance.notPaired:
@@ -196,5 +219,30 @@ class _MyHomePageState extends State<MyHomePage> {
         default:
       }
     });
+  }
+
+  Future<String?> onGetRootCA() async {
+    try {
+      //Fetching rootCA,
+      final Dio dio = Dio(BaseOptions(baseUrl: EvironmentDev.baseUrl));
+      dio.interceptors.add(HttpSignatureInterceptor());
+      final response = await dio.get(
+        EvironmentDev.getRootCA,
+        data: null,
+      );
+      final rootCA = response.data['certificateChain'];
+      if (response.statusCode != 200 && rootCA == null) {
+        return null;
+      }
+      //Replace with your rootCA
+
+      debugPrint('Successful saveRootCA: ${response.data}');
+      debugPrint(
+          'Successful saveRootCA type: ${response.data['certificateChain'].runtimeType}');
+      return rootCA;
+    } catch (e) {
+      debugPrint('error: $e');
+      return null;
+    }
   }
 }
