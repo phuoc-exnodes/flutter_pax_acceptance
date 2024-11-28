@@ -1,5 +1,3 @@
-part of flutter_pax_acceptance;
-
 class TransactionStatusResponse {
   final String type;
   final String message;

@@ -1,4 +1,6 @@
-part of flutter_pax_acceptance;
+import 'dart:convert';
+
+import '../flutter_pax_acceptance.dart';
 
 ///A capsulated flow for FlutterPaxAcceptance request.
 ///

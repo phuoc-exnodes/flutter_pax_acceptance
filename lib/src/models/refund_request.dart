@@ -1,4 +1,4 @@
-part of flutter_pax_acceptance;
+import '../../flutter_pax_acceptance.dart';
 
 class RefundRequest {
   final String type = 'LinkedRefundRequest';

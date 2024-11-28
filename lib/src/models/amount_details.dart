@@ -1,5 +1,3 @@
-part of flutter_pax_acceptance;
-
 class AmountDetails {
   final String currency;
   final String amount;

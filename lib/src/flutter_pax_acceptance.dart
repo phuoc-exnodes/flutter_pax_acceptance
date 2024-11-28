@@ -1,4 +1,13 @@
-part of flutter_pax_acceptance;
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'models/pax_pair_request.dart';
 
 class FlutterPaxAcceptance with ChangeNotifier {
   ///When no rootRA are found

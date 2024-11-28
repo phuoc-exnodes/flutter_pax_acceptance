@@ -1,5 +1,3 @@
-part of flutter_pax_acceptance;
-
 class PaxPairRequest {
   final String posId;
   final String setupCode;
