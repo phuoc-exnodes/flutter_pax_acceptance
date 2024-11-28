@@ -9,7 +9,15 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'models/pax_pair_request.dart';
+part 'models/amount_details.dart';
+part 'models/pax_pair_request.dart';
+part 'models/payment_response.dart';
+part 'models/refund_request.dart';
+part 'models/sale_payment_request.dart';
+part 'models/transaction_details.dart';
+part 'models/transaction_error_response.dart';
+part 'models/transaction_status_response.dart';
+part 'payzli_payment_pax.dart';
 
 class FlutterPaxAcceptance with ChangeNotifier {
   ///When no rootRA are found

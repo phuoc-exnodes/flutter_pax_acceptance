@@ -1,3 +1,5 @@
+part of '../flutter_pax_acceptance.dart';
+
 class PaxPairRequest {
   final String posId;
   final String setupCode;

@@ -1,3 +1,5 @@
+part of '../flutter_pax_acceptance.dart';
+
 class AmountDetails {
   final String currency;
   final String amount;

@@ -1,3 +1,5 @@
+part of '../flutter_pax_acceptance.dart';
+
 class TransactionStatusResponse {
   final String type;
   final String message;
