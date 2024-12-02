@@ -1,12 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter_pax_acceptance/flutter_pax_acceptance.dart';
-
-import 'models/payment_response.dart';
-import 'models/refund_request.dart';
-import 'models/sale_payment_request.dart';
-import 'models/transaction_error_response.dart';
-import 'models/transaction_status_response.dart';
+import '../flutter_pax_acceptance.dart';
 
 ///A capsulated flow for FlutterPaxAcceptance request.
 ///
