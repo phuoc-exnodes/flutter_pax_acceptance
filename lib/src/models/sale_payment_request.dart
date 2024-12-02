@@ -1,4 +1,4 @@
-import 'amount_details.dart';
+import '../../flutter_pax_acceptance.dart';
 
 class SalePaymentRequest {
   final String type = 'PaymentRequest';

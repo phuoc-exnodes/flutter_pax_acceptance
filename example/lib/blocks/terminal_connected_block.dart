@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_pax_acceptance/flutter_pax_acceptance.dart';
-import 'package:flutter_pax_acceptance/models/amount_details.dart';
-import 'package:flutter_pax_acceptance/models/refund_request.dart';
-import 'package:flutter_pax_acceptance/models/sale_payment_request.dart';
-import 'package:flutter_pax_acceptance/payzli_payment_pax.dart';
 
 class TerminalConnectedBlock extends StatefulWidget {
   const TerminalConnectedBlock(this.paxAcceptance, {super.key});
@@ -32,24 +28,24 @@ class _TerminalConnectedBlockState extends State<TerminalConnectedBlock> {
                   PayzliPaymentPAX(widget.paxAcceptance).transactionSale(
                     saleRequest,
                     onDoneApproved: (response) {
-                      print('onDoneApproved:');
-                      print(response.toJson());
+                      debugPrint('onDoneApproved:');
+                      debugPrint(response.toJson().toString());
                     },
                     onDoneAborted: (response) {
-                      print('onDoneAborted:');
-                      print(response.toJson());
+                      debugPrint('onDoneAborted:');
+                      debugPrint(response.toJson().toString());
                     },
                     onError: (error) {
-                      print('onError:');
-                      print(error);
+                      debugPrint('onError:');
+                      debugPrint(error);
                     },
                     onStatus: (response) {
-                      print('onStatus:');
-                      print(response.toJson());
+                      debugPrint('onStatus:');
+                      debugPrint(response.toJson().toString());
                     },
                     onErrorResponse: (response) {
-                      print('onErrorResponse:');
-                      print(response.toJson());
+                      debugPrint('onErrorResponse:');
+                      debugPrint(response.toJson().toString());
                     },
                   );
                 },
