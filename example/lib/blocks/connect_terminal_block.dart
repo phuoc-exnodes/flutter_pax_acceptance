@@ -26,9 +26,11 @@ class _ConnectTerminalBlockState extends State<ConnectTerminalBlock> {
   }
 
   void onStateChange() {
-    setState(() {
-      isLoading = widget.paxAcceptance.isLoading;
-    });
+    if (mounted) {
+      setState(() {
+        isLoading = widget.paxAcceptance.isLoading;
+      });
+    }
   }
 
   bool isLoading = false;

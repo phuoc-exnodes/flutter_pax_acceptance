@@ -64,135 +64,141 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: Center(
-        child: Column(
-          children: [
-            Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text(
-                    'TERMINAL STATE',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Column(
+            children: [
+              Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      'TERMINAL STATE',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Center(
-                  child: Text(
-                    _stateName,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700),
+                  const SizedBox(height: 10),
+                  Center(
+                    child: Text(
+                      _stateName,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                        onPressed: () async {
-                          if (loading) {
-                            return;
-                          }
-                          setLoading(true);
-                          await _paxAcceptance.refresh();
-                          setLoading(false);
-                        },
-                        child: const Text('Refresh')),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                        onPressed: () {
-                          _paxAcceptance.unPair();
-                        },
-                        child: const Text('Unpair')),
-                  ],
-                )
-              ],
-            ),
-            Expanded(child: Builder(
-              builder: (context) {
-                if (loading) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-
-                switch (_paxState) {
-                  case FlutterPaxAcceptance.notInitialized:
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton(
-                            onPressed: () async {
-                              if (loading) {
-                                return;
-                              }
-                              setLoading(true);
-                              await _paxAcceptance.initialize(
-                                onGetRootCA: onGetRootCA,
-                              );
-                              setLoading(false);
-                            },
-                            child: const Text('Init')),
-                      ],
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                          onPressed: () async {
+                            if (loading) {
+                              return;
+                            }
+                            setLoading(true);
+                            await _paxAcceptance.refresh();
+                            setLoading(false);
+                          },
+                          child: const Text('Refresh')),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                          onPressed: () {
+                            _paxAcceptance.unPair();
+                          },
+                          child: const Text('Unpair')),
+                    ],
+                  )
+                ],
+              ),
+              Expanded(child: Builder(
+                builder: (context) {
+                  if (loading) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
                     );
-                  case FlutterPaxAcceptance.notReady:
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton(
-                            onPressed: () async {
-                              if (loading) {
-                                return;
-                              }
-                              setLoading(true);
-                              // final success =
-                              // await _paxAcceptance.setRootCA('asdw');
-                              // if (!success) {
-                              //   ScaffoldMessenger.maybeOf(context)
-                              //       ?.showSnackBar(const SnackBar(
-                              //           content:
-                              //               Text('Failed to Set rootCA ')));
-                              // }
+                  }
 
-                              _paxAcceptance.onGetRootCA = onGetRootCA;
-                              final success = await _paxAcceptance.refresh();
-
-                              setLoading(false);
-                            },
-                            child: const Text('Set rootCA ')),
-                      ],
-                    );
-                  case FlutterPaxAcceptance.notPaired:
-                    return PairTerminalBlockView(_paxAcceptance);
-                  case FlutterPaxAcceptance.disconnected:
-                    return ConnectTerminalBlock(
-                      paxAcceptance: _paxAcceptance,
-                    );
-                  case FlutterPaxAcceptance.connected:
-                    return TerminalConnectedBlock(_paxAcceptance);
-                  default:
-                    return Column(
-                      children: [
-                        const Expanded(
-                            child: Center(
-                          child: Text('Terminal Is processing Request'),
-                        )),
-                        SizedBox(
-                          height: 100,
-                          child: ElevatedButton(
-                              onPressed: () {
-                                _paxAcceptance.cancelProcessing();
+                  switch (_paxState) {
+                    case FlutterPaxAcceptance.notInitialized:
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                              onPressed: () async {
+                                if (loading) {
+                                  return;
+                                }
+                                setLoading(true);
+                                await _paxAcceptance.initialize(
+                                  onGetRootCA: onGetRootCA,
+                                );
+                                setLoading(false);
                               },
-                              child: const Text('Cancel Processing')),
-                        ),
-                      ],
-                    );
-                }
-              },
-            )),
-          ],
+                              child: const Text('Init')),
+                        ],
+                      );
+                    case FlutterPaxAcceptance.notReady:
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                              onPressed: () async {
+                                if (loading) {
+                                  return;
+                                }
+                                setLoading(true);
+                                // final success =
+                                // await _paxAcceptance.setRootCA('asdw');
+                                // if (!success) {
+                                //   ScaffoldMessenger.maybeOf(context)
+                                //       ?.showSnackBar(const SnackBar(
+                                //           content:
+                                //               Text('Failed to Set rootCA ')));
+                                // }
+
+                                _paxAcceptance.onGetRootCA = onGetRootCA;
+                                final success = await _paxAcceptance.refresh();
+
+                                setLoading(false);
+                              },
+                              child: const Text('Set rootCA ')),
+                        ],
+                      );
+                    case FlutterPaxAcceptance.notPaired:
+                      return PairTerminalBlockView(_paxAcceptance);
+                    case FlutterPaxAcceptance.disconnected:
+                      return ConnectTerminalBlock(
+                        paxAcceptance: _paxAcceptance,
+                      );
+                    case FlutterPaxAcceptance.connected:
+                      return TerminalConnectedBlock(_paxAcceptance);
+                    default:
+                      return Column(
+                        children: [
+                          const Expanded(
+                              child: Center(
+                            child: Text('Terminal Is processing Request'),
+                          )),
+                          SizedBox(
+                            height: 100,
+                            child: ElevatedButton(
+                                onPressed: () {
+                                  _paxAcceptance.cancelProcessing();
+                                },
+                                child: const Text('Cancel Processing')),
+                          ),
+                        ],
+                      );
+                  }
+                },
+              )),
+            ],
+          ),
         ),
       ),
     );

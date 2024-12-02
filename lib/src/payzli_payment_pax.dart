@@ -9,8 +9,22 @@ class PayzliPaymentPAX {
   final FlutterPaxAcceptance _service;
   PayzliPaymentPAX(this._service);
 
+  ///Check Service State before processing the request
+  bool checkServiceState(void Function(String error)? onError) {
+    if (_service.state != FlutterPaxAcceptance.connected) {
+      onError?.call('FlutterPaxAcceptance not Connected');
+      return false;
+    }
+    if (_service.state == FlutterPaxAcceptance.processing) {
+      onError?.call('FlutterPaxAcceptance is processing a request');
+      return false;
+    }
+    return true;
+  }
+
   ///handle full payment flow
-  void transactionSale(
+  ///return true if process has started, else:call onError and return false
+  bool transactionSale(
     SalePaymentRequest request, {
     required void Function(PaymentResponse response) onDoneApproved,
     required void Function(PaymentResponse response) onDoneAborted,
@@ -19,13 +33,8 @@ class PayzliPaymentPAX {
     void Function(String error)? onError,
   }) {
     //Validating requirement,...
-    if (_service.state != FlutterPaxAcceptance.connected) {
-      onError?.call('FlutterPaxAcceptance not Connected');
-      return;
-    }
-    if (_service.state == FlutterPaxAcceptance.processing) {
-      onError?.call('FlutterPaxAcceptance is processing a request');
-      return;
+    if (!checkServiceState(onError)) {
+      return false;
     }
     //validate input
 
@@ -69,11 +78,12 @@ class PayzliPaymentPAX {
         onError?.call(e.toString());
       }
     });
-    return;
+    return true;
   }
 
   ///handle Linkded Refund
-  void refund(
+  ///return true if process has started, else:call onError and return false
+  bool refund(
     RefundRequest request, {
     required void Function(PaymentResponse response) onDoneApproved,
     required void Function(PaymentResponse response) onDoneAborted,
@@ -82,13 +92,8 @@ class PayzliPaymentPAX {
     void Function(String error)? onError,
   }) {
     //Validating requirement,...
-    if (_service.state != FlutterPaxAcceptance.connected) {
-      onError?.call('FlutterPaxAcceptance not Connected');
-      return;
-    }
-    if (_service.state == FlutterPaxAcceptance.processing) {
-      onError?.call('FlutterPaxAcceptance is processing a request');
-      return;
+    if (!checkServiceState(onError)) {
+      return false;
     }
     //validate input
 
@@ -129,9 +134,63 @@ class PayzliPaymentPAX {
         onError?.call(e.toString());
       }
     });
+    return true;
   }
 
   void abortProcessing() {
     _service.cancelProcessing();
+  }
+
+  ///handle Check Transaction Status
+  ///return true if process has started, else:call onError and return false
+  bool checkTransactionStatus(
+    TransactionLookupRequest request, {
+    required void Function(PaymentResponse response) onDone,
+    void Function(TransactionStatusResponse response)? onMidStatus,
+    void Function(ErrorResponse response)? onErrorResponse,
+    void Function(String error)? onError,
+  }) {
+    //Check Service state,...
+    if (!checkServiceState(onError)) {
+      return false;
+    }
+    //validate input.,..
+
+    //Start processing
+    _service.process(request.toJson(), (data) {
+      try {
+        final jsonData = jsonDecode(data);
+
+        switch (jsonData['type']) {
+          case 'TransactionStatusResponse':
+            {
+              final response = TransactionStatusResponse.fromJson(jsonData);
+              onMidStatus?.call(response);
+            }
+            break;
+          case 'TransactionLookupResponse':
+            {
+              final paymentResponse = PaymentResponse.fromJson(jsonData);
+              onDone.call(paymentResponse);
+              _service.completeProcessing();
+            }
+            break;
+          case 'ErrorResponse':
+            {
+              final errorResponse = ErrorResponse.fromJson(jsonData);
+              onErrorResponse?.call(errorResponse);
+              if (errorResponse.message == 'Transaction was aborted') {
+                _service.completeProcessing();
+              }
+            }
+            break;
+          default:
+        }
+      } catch (e) {
+        _service.completeProcessing();
+        onError?.call(e.toString());
+      }
+    });
+    return true;
   }
 }

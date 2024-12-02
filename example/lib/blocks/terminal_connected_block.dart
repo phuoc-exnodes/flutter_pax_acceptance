@@ -22,8 +22,8 @@ class _TerminalConnectedBlockState extends State<TerminalConnectedBlock> {
                 onPressed: () async {
                   final saleRequest = SalePaymentRequest(
                     merchantReferenceCode: 'awda',
-                    amountDetails:
-                        AmountDetails.sale(currency: 'USD', amount: '1.00'),
+                    amountDetails: const AmountDetails.sale(
+                        currency: 'USD', amount: '1.00'),
                   );
                   PayzliPaymentPAX(widget.paxAcceptance).transactionSale(
                     saleRequest,
@@ -60,30 +60,64 @@ class _TerminalConnectedBlockState extends State<TerminalConnectedBlock> {
                   PayzliPaymentPAX(widget.paxAcceptance).refund(
                     saleRequest,
                     onDoneApproved: (response) {
-                      print('onDoneApproved:');
-                      print(response.toJson());
+                      debugPrint('onDoneApproved:');
+                      debugPrint(response.toJson().toString());
                     },
                     onDoneAborted: (response) {
-                      print('onDoneAborted:');
-                      print(response.toJson());
+                      debugPrint('onDoneAborted:');
+                      debugPrint(response.toJson().toString());
                     },
                     onError: (error) {
-                      print('onError:');
-                      print(error);
+                      debugPrint('onError:');
+                      debugPrint(error);
                     },
                     onStatus: (response) {
-                      print('onStatus:');
-                      print(response.toJson());
+                      debugPrint('onStatus:');
+                      debugPrint(response.toJson().toString());
                     },
                     onErrorResponse: (response) {
-                      print('onErrorResponse:');
-                      print(response.toJson());
+                      debugPrint('onErrorResponse:');
+                      debugPrint(response.toJson().toString());
                     },
                   );
                 },
                 child: const Text('Request refund')),
+            ElevatedButton(
+                onPressed: () async {
+                  const saleRequest = TransactionLookupRequest.fromTransactID(
+                      id: '68412449aac14da2a1a7c09b0cb274a1');
+                  PayzliPaymentPAX(widget.paxAcceptance).checkTransactionStatus(
+                    saleRequest,
+                    onDone: (response) {
+                      debugPrint('onDoneApproved:');
+                      debugPrint(response.toJson().toString());
+                    },
+                    onError: (error) {
+                      debugPrint('onError:');
+                      debugPrint(error);
+                    },
+                    onMidStatus: (response) {
+                      debugPrint('onMidStatus:');
+                      debugPrint(response.toJson().toString());
+                    },
+                    onErrorResponse: (response) {
+                      debugPrint('onErrorResponse:');
+                      debugPrint(response.toJson().toString());
+                    },
+                  );
+                },
+                child: const Text('Check transaction status')),
           ],
         )),
+        Text('Completed transactions:'),
+        SizedBox(
+          height: 200,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [SelectableText('68412449aac14da2a1a7c09b0cb274a1')],
+            ),
+          ),
+        ),
         SizedBox(
           height: 100,
           child: ElevatedButton(
